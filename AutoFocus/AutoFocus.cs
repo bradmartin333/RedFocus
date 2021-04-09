@@ -26,7 +26,9 @@ namespace AutoFocus
 
             double MaxScore = scores.Max();
             int BestIdx = scores.IndexOf(MaxScore);
-            Panel.BackgroundImage = new Bitmap(Image.FromFile(files[BestIdx]));
+            Bitmap bitmap = new Bitmap(Image.FromFile(files[BestIdx]));
+            HighlightGrid(ref bitmap);
+            Panel.BackgroundImage = bitmap;
             Plot.plt.PlotPoint(BestIdx, MaxScore);
         }
     }

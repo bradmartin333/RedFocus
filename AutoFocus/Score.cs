@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using static AutoFocus.Colorizer;
 
 namespace AutoFocus
 {
@@ -32,6 +33,21 @@ namespace AutoFocus
             }
 
             return NeighborSharpness(PxlVals);
+        }
+
+        public static void HighlightGrid(ref Bitmap img)
+        {
+            using (Graphics g = Graphics.FromImage(img))
+            {
+                for (int i = 0; i < img.Width; i += _ScanSize)
+                {
+                    for (int j = 0; j < img.Height; j += _ScanSize)
+                    {
+                        Color color = GetNextRainbowColor();
+                        g.FillRectangle(new SolidBrush(color), new Rectangle(i, j, _ScanSize, _ScanSize));
+                    }
+                }
+            }
         }
 
         private static double NeighborSharpness(double[,] PxlVals)
