@@ -1,32 +1,32 @@
 {
   "format": 1,
   "restore": {
-    "S:\\RedFocus\\RedFocus\\RedFocus.vbproj": {}
+    "S:\\RedFocus\\AutoFocus\\AutoFocus.csproj": {}
   },
   "projects": {
-    "S:\\RedFocus\\RedFocus\\RedFocus.vbproj": {
+    "S:\\RedFocus\\AutoFocus\\AutoFocus.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "S:\\RedFocus\\RedFocus\\RedFocus.vbproj",
-        "projectName": "RedFocus",
-        "projectPath": "S:\\RedFocus\\RedFocus\\RedFocus.vbproj",
+        "projectUniqueName": "S:\\RedFocus\\AutoFocus\\AutoFocus.csproj",
+        "projectName": "AutoFocus",
+        "projectPath": "S:\\RedFocus\\AutoFocus\\AutoFocus.csproj",
         "packagesPath": "C:\\Users\\delta\\.nuget\\packages\\",
-        "outputPath": "S:\\RedFocus\\RedFocus\\obj\\",
+        "outputPath": "S:\\RedFocus\\AutoFocus\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\delta\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
-          "net5.0-windows7.0"
+          "netcoreapp3.1"
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "net5.0-windows7.0": {
-            "targetAlias": "net5.0-windows",
+          "netcoreapp3.1": {
+            "targetAlias": "netcoreapp3.1",
             "projectReferences": {}
           }
         },
@@ -37,8 +37,8 @@
         }
       },
       "frameworks": {
-        "net5.0-windows7.0": {
-          "targetAlias": "net5.0-windows",
+        "netcoreapp3.1": {
+          "targetAlias": "netcoreapp3.1",
           "imports": [
             "net461",
             "net462",

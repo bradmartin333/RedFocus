@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "RedFocus", "RedFocus.vbproj", "{F7982440-26C1-4D3F-BF06-E524759E19C3}"
+Project("{778DAE3C-4631-46EA-AA77-85C1314464D9}") = "RedFocus", "RedFocus.vbproj", "{F7982440-26C1-4D3F-BF06-E524759E19C3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoFocus", "..\AutoFocus\AutoFocus.csproj", "{9364CF2B-0440-4A99-9A33-F81E621B3092}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{F7982440-26C1-4D3F-BF06-E524759E19C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F7982440-26C1-4D3F-BF06-E524759E19C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F7982440-26C1-4D3F-BF06-E524759E19C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9364CF2B-0440-4A99-9A33-F81E621B3092}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9364CF2B-0440-4A99-9A33-F81E621B3092}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9364CF2B-0440-4A99-9A33-F81E621B3092}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9364CF2B-0440-4A99-9A33-F81E621B3092}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
