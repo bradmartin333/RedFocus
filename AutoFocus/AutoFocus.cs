@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -24,7 +25,11 @@ namespace AutoFocus
 
             // Score each image
             foreach (string f in files)
+            {
                 scores.Add(ScoreImageGrid(new Bitmap(Image.FromFile(f)), focusTiles));
+                GC.Collect();
+            }
+
 
             // Scatterplot of scores
             var xs = Enumerable.Range(0, files.Length).Select(number => (double) number);
@@ -33,6 +38,8 @@ namespace AutoFocus
 
             double MaxScore = scores.Max(); // Max is usually the best
             int BestIdx = scores.IndexOf(MaxScore);
+
+            Debug.WriteLine(files[BestIdx]);
 
             Bitmap bitmap = new Bitmap(Image.FromFile(files[BestIdx]));
             HighlightTiles(ref bitmap, focusTiles); // Show what grid was used
