@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using MathNet.Numerics.Statistics;
 using static AutoFocus.Colorizer;
 
 namespace AutoFocus
@@ -37,14 +39,40 @@ namespace AutoFocus
 
         public static void HighlightGrid(ref Bitmap img)
         {
+            List<double> entropies = new List<double>();
+
+            for (int i = 0; i < img.Width; i += _ScanSize)
+            {
+                for (int j = 0; j < img.Height; j += _ScanSize)
+                {
+                    Bitmap tile = new Bitmap(_ScanSize, _ScanSize);
+                    BitmapCrop(new Rectangle(i, j, _ScanSize, _ScanSize), img, ref tile);
+                    List<double> entropyList = new List<double>();
+                    for (int k = 0; k < tile.Width; k++)
+                    {
+                        for (int l = 0; l < tile.Height; l++)
+                        {
+                            entropyList.Add(tile.GetPixel(k, l).ToArgb());
+                        }
+                    }
+                    entropies.Add(Statistics.Entropy(entropyList.ToArray()));
+                }
+            }
+
+            Histogram histogram = new Histogram(entropies, 3);
+
+            int bucketIdx = 0;
             using (Graphics g = Graphics.FromImage(img))
             {
                 for (int i = 0; i < img.Width; i += _ScanSize)
                 {
                     for (int j = 0; j < img.Height; j += _ScanSize)
                     {
-                        Color color = GetNextRainbowColor();
-                        g.FillRectangle(new SolidBrush(color), new Rectangle(i, j, _ScanSize, _ScanSize));
+                        if (histogram.GetBucketIndexOf(entropies[bucketIdx]) == 2)
+                        {
+                            g.FillRectangle(new SolidBrush(Color.FromArgb(100 ,Color.Green)), new Rectangle(i, j, _ScanSize, _ScanSize));
+                        }
+                        bucketIdx++;
                     }
                 }
             }

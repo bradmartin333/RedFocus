@@ -14,6 +14,12 @@ namespace AutoFocus
             return Color.FromArgb(100, c.R, c.G, c.B);
         }
 
+        public static Color GetScoreColor(double score)
+        {
+            ColorRGB c = HSL2RGB(1 / score, 0.5, 0.5);
+            return Color.FromArgb(100, c.R, c.G, c.B);
+        }
+
         public struct ColorRGB
         {
             public byte R;
