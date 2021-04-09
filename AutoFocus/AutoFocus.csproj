@@ -6,4 +6,9 @@
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ScottPlot" Version="4.0.48" />
+    <PackageReference Include="ScottPlot.WinForms" Version="4.0.48" />
+  </ItemGroup>
+
 </Project>
