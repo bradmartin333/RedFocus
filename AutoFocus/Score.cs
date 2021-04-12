@@ -10,27 +10,21 @@ namespace AutoFocus
     static class Score
     {
         private static int _ScanSize, _Wid, _Hgt;
+        private static double _GridSize = 10.0; // n x n grid
+        private static int _NumBins = 10; // Number of histogram bins for training grid
+        private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
 
-        /// <summary>
         /// Handy tool used as a method
-        /// </summary>
-        /// <param name="crop"></param>
-        /// <param name="src"></param>
-        /// <param name="target"></param>
         private static void BitmapCrop(Rectangle crop, Bitmap src, ref Bitmap target)
         {
             using var g = Graphics.FromImage(target);
             g.DrawImage(src, new Rectangle(0, 0, crop.Width, crop.Height), crop, GraphicsUnit.Pixel);
         }
 
-        /// <summary>
-        /// Gets 5x5 grid pixels and then scores the image
-        /// </summary>
-        /// <param name="img"></param>
-        /// <returns></returns>
+        // Gets grid pixels and then scores the image
         public static double ScoreImageFocus(Bitmap img)
         {
-            _ScanSize = (int)(Math.Min(img.Height, img.Width) * 0.2); // Break into a 5x5 grid
+            _ScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
             _Wid = img.Width / _ScanSize;
             _Hgt = img.Height / _ScanSize;
 
@@ -47,11 +41,7 @@ namespace AutoFocus
             return GetNeighborSharpness(PxlVals);
         }
 
-        /// <summary>
-        /// The core of AutoFocus
-        /// </summary>
-        /// <param name="PxlVals"></param>
-        /// <returns></returns>
+        // The core of AutoFocus
         private static double GetNeighborSharpness(double[,] PxlVals)
         {
             List<double> PDiff = new List<double>();
@@ -93,7 +83,7 @@ namespace AutoFocus
         /// <returns></returns>
         public static double ScoreImageGrid(Bitmap img, int[] tiles)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * 0.2); // Break into a 5x5 grid
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
             int tileIDX = 0;
             List<double> scores = new List<double>();
             
@@ -114,14 +104,10 @@ namespace AutoFocus
             return scores.Sum() / scores.Count();
         }
 
-        /// <summary>
-        /// Returns the tiles within a 5x5 grid that have entropies in the 3rd out of 3 histogram bins
-        /// </summary>
-        /// <param name="img"></param>
-        /// <returns></returns>
+        // Returns the tiles within a grid that have entropies in the highest 2 histogram bins
         public static int[] GetTiles(Bitmap img)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * 0.2); // Break into a 5x5 grid
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
             List<int> tiles = new List<int>();
             List<double> entropies = new List<double>();
 
@@ -143,7 +129,26 @@ namespace AutoFocus
                 }
             }
 
-            Histogram histogram = new Histogram(entropies, 3);
+            Histogram histogram = new Histogram(entropies, _NumBins);
+
+            int binSelector = 1;
+            double numTilesDesired = entropies.Count * _AmountDataDesired;
+            string[] bins = histogram.ToString().Split('(');
+            for (int i = bins.Count() - 1; i >= 0; i--)
+            {
+                if (bins[i] == "")
+                    continue;
+
+                int binCount = int.Parse(bins[i].Split(' ').Last());
+                numTilesDesired -= binCount;
+
+                if (numTilesDesired <= 0)
+                    break;
+
+                binSelector++;
+            }
+
+            Debug.WriteLine(binSelector);
 
             int tileIDX = 0;
             using (Graphics g = Graphics.FromImage(img))
@@ -152,9 +157,9 @@ namespace AutoFocus
                 {
                     for (int j = 0; j < img.Height; j += tileScanSize)
                     {
-                        if (histogram.GetBucketIndexOf(entropies[tileIDX]) == 2)
+                        if (histogram.GetBucketIndexOf(entropies[tileIDX]) >= _NumBins - binSelector)
                         {
-                            tiles.Add(tileIDX);
+                            tiles.Add(tileIDX);  // Only want tiles in the highest 2 bins
                         }
                         tileIDX++;
                     }
@@ -171,7 +176,7 @@ namespace AutoFocus
         /// <param name="tiles"></param>
         public static void HighlightTiles(ref Bitmap img, int[] tiles)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * 0.2); // Break into a 5x5 grid
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
             int tileIDX = 0;
             using (Graphics g = Graphics.FromImage(img))
             {
