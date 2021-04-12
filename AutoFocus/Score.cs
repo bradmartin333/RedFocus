@@ -159,7 +159,7 @@ namespace AutoFocus
                     {
                         if (histogram.GetBucketIndexOf(entropies[tileIDX]) >= _NumBins - binSelector)
                         {
-                            tiles.Add(tileIDX);  // Only want tiles in the highest 2 bins
+                            tiles.Add(tileIDX);
                         }
                         tileIDX++;
                     }
