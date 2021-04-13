@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using MathNet.Numerics.Statistics;
@@ -147,8 +146,6 @@ namespace AutoFocus
 
                 binSelector++;
             }
-
-            Debug.WriteLine(binSelector);
 
             int tileIDX = 0;
             using (Graphics g = Graphics.FromImage(img))

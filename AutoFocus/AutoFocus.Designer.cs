@@ -68,7 +68,7 @@ namespace AutoFocus
             // Pbx
             // 
             this.Pbx.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.Pbx.Image = global::AutoFocus.Properties.Resources.loading_dog;
+            this.Pbx.Image = global::AutoFocus.Properties.Resources.RunSPOT;
             this.Pbx.Location = new System.Drawing.Point(3, 3);
             this.Pbx.Name = "Pbx";
             this.Pbx.Size = new System.Drawing.Size(316, 215);
