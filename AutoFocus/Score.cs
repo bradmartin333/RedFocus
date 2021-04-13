@@ -101,11 +101,12 @@ namespace AutoFocus
                 }
             }
 
+            GC.Collect();
             return scores.Sum() / scores.Count();
         }
 
         // Returns the tiles within a grid that have entropies in the highest 2 histogram bins
-        public static int[] GetTiles(Bitmap img)
+        public static int[] GetTiles(Bitmap img, ref int binSelector)
         {
             int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
             List<int> tiles = new List<int>();
@@ -131,7 +132,6 @@ namespace AutoFocus
 
             Histogram histogram = new Histogram(entropies, _NumBins);
 
-            int binSelector = 1;
             double numTilesDesired = entropies.Count * _AmountDataDesired;
             string[] bins = histogram.ToString().Split('(');
             for (int i = bins.Count() - 1; i >= 0; i--)
