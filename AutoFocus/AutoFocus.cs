@@ -20,7 +20,8 @@ namespace AutoFocus
         public AutoFocus()
         {
             InitializeComponent();
-            _Files = Directory.GetFiles(@"C:\Repos\RedFocus\Examples\Test");
+            string startupPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
+            _Files = Directory.GetFiles(startupPath + "/Examples/Test");
             FocusWorker.RunWorkerAsync();
         }
 
