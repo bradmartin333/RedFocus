@@ -8,10 +8,11 @@ namespace AutoFocus
 {
     static class Score
     {
+        public static int _NumTiles = 1;
+
         private static int _ScanSize, _Wid, _Hgt;
-        private static double _GridSize = 10.0; // n x n grid
-        private static int _NumBins = 10; // Number of histogram bins for training grid
-        private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
+        private static double _GridSize = 5.0; // n x n grid
+        private static double _AmountDataDesired = 0.25; // Highest 10% of available data from training grid
 
         /// Handy tool used as a method
         private static void BitmapCrop(Rectangle crop, Bitmap src, ref Bitmap target)
@@ -105,11 +106,11 @@ namespace AutoFocus
         }
 
         // Returns the tiles within a grid that have entropies in the highest 2 histogram bins
-        public static int[] GetTiles(Bitmap img, ref int binSelector)
+        public static int[] GetTiles(Bitmap img)
         {
             int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
-            List<int> tiles = new List<int>();
-            List<double> entropies = new List<double>();
+            Dictionary<int, double> entropyDict = new Dictionary<int, double>();
+            int entropyIDX = 0;
 
             for (int i = 0; i < img.Width; i += tileScanSize)
             {
@@ -125,45 +126,15 @@ namespace AutoFocus
                             entropyList.Add(tile.GetPixel(k, l).ToArgb());
                         }
                     }
-                    entropies.Add(Statistics.Entropy(entropyList.ToArray()));
+                    entropyDict.Add(entropyIDX, (Statistics.Entropy(entropyList.ToArray())));
+                    entropyIDX++;
                 }
             }
 
-            Histogram histogram = new Histogram(entropies, _NumBins);
-
-            double numTilesDesired = entropies.Count * _AmountDataDesired;
-            string[] bins = histogram.ToString().Split('(');
-            for (int i = bins.Count() - 1; i >= 0; i--)
-            {
-                if (bins[i] == "")
-                    continue;
-
-                int binCount = int.Parse(bins[i].Split(' ').Last());
-                numTilesDesired -= binCount;
-
-                if (numTilesDesired <= 0)
-                    break;
-
-                binSelector++;
-            }
-
-            int tileIDX = 0;
-            using (Graphics g = Graphics.FromImage(img))
-            {
-                for (int i = 0; i < img.Width; i += tileScanSize)
-                {
-                    for (int j = 0; j < img.Height; j += tileScanSize)
-                    {
-                        if (histogram.GetBucketIndexOf(entropies[tileIDX]) >= _NumBins - binSelector)
-                        {
-                            tiles.Add(tileIDX);
-                        }
-                        tileIDX++;
-                    }
-                }
-            }
-
-            return tiles.ToArray();
+            IEnumerable<int> sortedTiles = entropyDict.OrderBy(x => x.Value).Select(x => x.Key).Reverse();
+            int[] tiles = sortedTiles.Take((int)(sortedTiles.Count() * _AmountDataDesired)).ToArray();
+            _NumTiles = tiles.Length;
+            return tiles;
         }
 
         /// <summary>
@@ -184,51 +155,6 @@ namespace AutoFocus
                         if (tiles.Contains(tileIDX))
                         {
                             g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Green)), new Rectangle(i, j, tileScanSize, tileScanSize));
-                        }
-                        tileIDX++;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Will colorize with the grid layout of the last scored image
-        /// </summary>
-        /// <param name="img"></param>
-        public static void HighlightGrid(ref Bitmap img)
-        {
-            List<double> entropies = new List<double>();
-
-            for (int i = 0; i < img.Width; i += _ScanSize)
-            {
-                for (int j = 0; j < img.Height; j += _ScanSize)
-                {
-                    Bitmap tile = new Bitmap(_ScanSize, _ScanSize);
-                    BitmapCrop(new Rectangle(i, j, _ScanSize, _ScanSize), img, ref tile);
-                    List<double> entropyList = new List<double>();
-                    for (int k = 0; k < tile.Width; k++)
-                    {
-                        for (int l = 0; l < tile.Height; l++)
-                        {
-                            entropyList.Add(tile.GetPixel(k, l).ToArgb());
-                        }
-                    }
-                    entropies.Add(Statistics.Entropy(entropyList.ToArray()));
-                }
-            }
-
-            Histogram histogram = new Histogram(entropies, 3);
-
-            int tileIDX = 0;
-            using (Graphics g = Graphics.FromImage(img))
-            {
-                for (int i = 0; i < img.Width; i += _ScanSize)
-                {
-                    for (int j = 0; j < img.Height; j += _ScanSize)
-                    {
-                        if (histogram.GetBucketIndexOf(entropies[tileIDX]) == 2)
-                        {
-                            g.FillRectangle(new SolidBrush(Color.FromArgb(100 ,Color.Green)), new Rectangle(i, j, _ScanSize, _ScanSize));
                         }
                         tileIDX++;
                     }

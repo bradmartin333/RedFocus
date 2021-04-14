@@ -10,7 +10,6 @@ namespace AutoFocus
     public partial class AutoFocus : Form
     {
         private string[] _Files;
-        private int _BinSelector = 1;
         private int[] _FocusTiles;
         private List<double> _Scores = new List<double>();
         private double _MaxScore;
@@ -32,7 +31,7 @@ namespace AutoFocus
             Plot.plt.PlotPoint(_BestIDX, _MaxScore);
             Plot.plt.XLabel("Image #");
             Plot.plt.YLabel("Focus Score");
-            Plot.plt.Title(string.Format("Using {0} Bin" + (_BinSelector > 1 ? "s" : ""), _BinSelector));
+            Plot.plt.Title(string.Format("Using {0} Tile{1}", _NumTiles, _NumTiles > 1 ? "s" : ""));
             Plot.Visible = true;
             Plot.ScrollWheelProcessor();
         }
@@ -46,7 +45,7 @@ namespace AutoFocus
 
         private void FocusWorker_DoWork(object sender, System.ComponentModel.DoWorkEventArgs e)
         {
-            _FocusTiles = GetTiles(new Bitmap(Image.FromFile(_Files[0])), ref _BinSelector); // Get tiles from first image in directory
+            _FocusTiles = GetTiles(new Bitmap(Image.FromFile(_Files[0]))); // Get tiles from first image in directory
 
             foreach (string f in _Files) // Score each image
                 _Scores.Add(ScoreImageGrid(new Bitmap(Image.FromFile(f)), _FocusTiles)); 
