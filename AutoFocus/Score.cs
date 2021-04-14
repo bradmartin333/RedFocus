@@ -98,6 +98,9 @@ namespace AutoFocus
                         scores.Add(ScoreImageFocus(tile));
                     }
                     tileIDX++;
+
+                    if (scores.Count == tiles.Length)
+                        break;
                 }
             }
 
