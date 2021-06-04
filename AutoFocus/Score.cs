@@ -11,8 +11,8 @@ namespace AutoFocus
         public static int _NumTiles = 1;
 
         private static int _ScanSize, _Wid, _Hgt;
-        private static double _GridSize = 5.0; // n x n grid
-        private static double _AmountDataDesired = 0.25; // Highest 10% of available data from training grid
+        private static double _GridSize = 15.0; // EDITABLE n x n grid
+        private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
 
         /// Handy tool used as a method
         private static void BitmapCrop(Rectangle crop, Bitmap src, ref Bitmap target)

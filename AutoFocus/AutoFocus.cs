@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -15,12 +16,18 @@ namespace AutoFocus
         private double _MaxScore;
         private int _BestIDX;
         private string _BestFileName;
+        private double _ImageScale = 0.2; // EDITABLE
+        private string _Path = ""; // EDITBALE
 
         public AutoFocus()
         {
             InitializeComponent();
+
             string startupPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
-            _Files = Directory.GetFiles(startupPath + "/Examples/Test");
+            _Files = Directory.GetFiles(startupPath + "/Examples/Test4");
+            
+            //_Files = Directory.GetFiles(_Path);
+            
             FocusWorker.RunWorkerAsync();
         }
 
@@ -45,10 +52,16 @@ namespace AutoFocus
 
         private void FocusWorker_DoWork(object sender, System.ComponentModel.DoWorkEventArgs e)
         {
-            _FocusTiles = GetTiles(new Bitmap(Image.FromFile(_Files[0]))); // Get tiles from first image in directory
+            Bitmap image = new Bitmap(Image.FromFile(_Files[0]));
+            Bitmap resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+            _FocusTiles = GetTiles(resizedImage); // Get tiles from first image in directory
 
             foreach (string f in _Files) // Score each image
-                _Scores.Add(ScoreImageGrid(new Bitmap(Image.FromFile(f)), _FocusTiles)); 
+            {
+                image = new Bitmap(Image.FromFile(f));
+                resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+                _Scores.Add(ScoreImageGrid(resizedImage, _FocusTiles));
+            }
 
             e.Result = true; // Complete the background job
         }
