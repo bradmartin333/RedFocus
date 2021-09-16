@@ -1,0 +1,365 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
+using XferCommon;
+
+namespace XferPrint.Utility
+{
+    public class MachineMapping
+    {
+        public enum ChuckTypes
+        {
+            Clean,
+            Target,
+            Source
+        }
+
+        public static ChuckTypes[] AllChucks = new ChuckTypes[] { ChuckTypes.Clean, ChuckTypes.Target, ChuckTypes.Source };
+        public static ChuckTypes[] NoClean = new ChuckTypes[] { ChuckTypes.Target, ChuckTypes.Source };
+
+        public int Increment = 25;
+        public bool CenterMounted = false;
+
+        // Configuration
+        private ChuckTypes[] _DesiredChucks;
+        private static PointF _Range = new PointF(CommonFunctionsAndVars.PrConfig.MaxStageRangeX, CommonFunctionsAndVars.PrConfig.MaxStageRangeY);
+        private List<PointF>[] _Points;
+        private string _LogPath = @"C:\XferPrint\Data\Log\Maps\";
+
+        // Clean
+        private static PointF _CleanCorner = new PointF((float)(CommonFunctionsAndVars.PrConfig.CleanTapeOriginX - CommonFunctionsAndVars.PrConfig.CleanTapeZoneLength), (float)(CommonFunctionsAndVars.PrConfig.CleanTapeOriginY - CommonFunctionsAndVars.PrConfig.CleanTapeZoneWidth));
+        private static SizeF _CleanSize = new SizeF((float)CommonFunctionsAndVars.PrConfig.CleanTapeZoneLength, (float)CommonFunctionsAndVars.PrConfig.CleanTapeZoneWidth);
+        private RectangleF _CleanRect = new RectangleF(_CleanCorner, _CleanSize);
+        private List<PointF> _CleanPoints = new List<PointF>();
+
+        // Target
+        private PointF _TargetCenter = new PointF((float)CommonFunctionsAndVars.PrConfig.TargetWaferOriginX, (float)CommonFunctionsAndVars.PrConfig.TargetWaferOriginY);
+        private double _TargetRadius = CommonFunctionsAndVars.PrConfig.TargetWaferSize / 2;
+        private List<PointF> _TargetCircle = new List<PointF>();
+        private List<PointF> _TargetPoints = new List<PointF>();
+
+        // Source
+        private PointF _SourceCenter = new PointF((float)CommonFunctionsAndVars.PrConfig.SourceWaferOriginX, (float)CommonFunctionsAndVars.PrConfig.SourceWaferOriginY);
+        private double _SourceRadius = CommonFunctionsAndVars.PrConfig.SourceWaferSize / 2;
+        private List<PointF> _SourceCircle = new List<PointF>();
+        private List<PointF> _SourcePoints = new List<PointF>();
+
+        // Filtering
+        private Point _Steps;
+        private double[][,] _ChuckData;
+        private double[] _Averages;
+        private double _OutlierThreshold = 0.03;
+        /// <summary>
+        /// The filtered machine map
+        /// </summary>
+        public double[,] FilteredData;
+
+        /// <summary>
+        /// Initialize a mapping class.
+        /// Provide array of which chucks to use.
+        /// </summary>
+        /// <param name="DesiredChucks"></param>
+        public MachineMapping(ChuckTypes[] DesiredChucks, int increment)
+        {
+            if (!Directory.Exists(_LogPath))
+            {
+                Directory.CreateDirectory(_LogPath);
+            }
+
+            Increment = increment;
+            _DesiredChucks = DesiredChucks;
+
+            _Steps = new Point((int)_Range.X / Increment, (int)_Range.Y / Increment);
+            _ChuckData = new double[][,] { new double[_Steps.Y, _Steps.X], new double[_Steps.Y, _Steps.X], new double[_Steps.Y, _Steps.X] };
+            _Averages = new double[_ChuckData.Length];
+            FilteredData = new double[_Steps.Y, _Steps.X]; // Reset data
+
+            double cirlceStep = 2 * Math.PI / 20;
+            for (double theta = 0; theta < 2 * Math.PI; theta += cirlceStep)
+            {
+                _TargetCircle.Add(new PointF((float)(_TargetCenter.X + _TargetRadius * Math.Cos(theta)), (float)(_TargetCenter.Y + _TargetRadius * Math.Sin(theta))));
+                _SourceCircle.Add(new PointF((float)(_SourceCenter.X + _SourceRadius * Math.Cos(theta)), (float)(_SourceCenter.Y + _SourceRadius * Math.Sin(theta))));
+            }
+
+            bool directionToggle = false;
+            for (int j = 0; j < _Range.Y; j += Increment)
+            {
+                if (directionToggle)
+                {
+                    for (float i = 0; i < _Range.X; i += Increment)
+                    {
+                        CheckAndAddPoint(i, j);
+                    }
+                }
+                else
+                {
+                    for (float i = _Range.X; i >= 0; i -= Increment)
+                    {
+                        CheckAndAddPoint(i, j);
+                    }
+                }
+                directionToggle = !directionToggle;
+            }
+
+            _Points = new List<PointF>[] { _CleanPoints, _TargetPoints, _SourcePoints };
+        }
+
+        private void CheckAndAddPoint(float i, float j)
+        {
+            PointF pointF = new PointF(i, j);
+            if (PointInPolygon(_TargetCircle.ToArray(), pointF))
+                _TargetPoints.Add(pointF);
+            if (PointInPolygon(_SourceCircle.ToArray(), pointF))
+                _SourcePoints.Add(pointF);
+            if (_CleanRect.Contains(pointF))
+                _CleanPoints.Add(pointF);
+        }
+
+        private bool PointInPolygon(PointF[] polygon, PointF testPoint)
+        {
+            bool result = false;
+            int j = polygon.Count() - 1;
+            for (int i = 0; i < polygon.Count(); i++)
+            {
+                if (polygon[i].Y < testPoint.Y && polygon[j].Y >= testPoint.Y || polygon[j].Y < testPoint.Y && polygon[i].Y >= testPoint.Y)
+                {
+                    if (polygon[i].X + (testPoint.Y - polygon[i].Y) / (polygon[j].Y - polygon[i].Y) * (polygon[j].X - polygon[i].X) < testPoint.X)
+                    {
+                        result = !result;
+                    }
+                }
+                j = i;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Scan the chucks specified at class initialization.
+        /// </summary>
+        /// <returns></returns>
+        public async System.Threading.Tasks.Task Scan()
+        {
+            foreach (ChuckTypes chuck in _DesiredChucks)
+            {
+                string chuckPath = _LogPath + chuck.ToString() + "Map.txt";
+                if (File.Exists(chuckPath))
+                {
+                    File.Delete(chuckPath);
+                }
+
+                for (int i = 0; i < _Points[(int)chuck].Count; i++)
+                {
+                    PointF pointF = _Points[(int)chuck][i];
+
+                    if (!CenterMounted)
+                    {
+                        pointF.X += (float)CommonFunctionsAndVars.PrConfig.HeightSensePosX;
+                        pointF.Y += (float)CommonFunctionsAndVars.PrConfig.HeightSensePosY;
+                    }
+
+                    if (pointF.X > _Range.X || pointF.Y > _Range.Y)
+                        continue;
+
+                    // Progress indicator
+                    My.MyProject.Forms.FormMain.lblStatus.Text = string.Format("{0} Scan {1}", 
+                        chuck.ToString(), (i / (double)_Points[(int)chuck].Count).ToString("P", CultureInfo.InvariantCulture));
+                    My.MyProject.Forms.FormMain.StatusPanel.BackColor = Color.LightBlue;
+
+                    bool moveSuccess = await System.Threading.Tasks.Task.Run(() => FunctionsAndVars.AerotechMoveLinearPair(FunctionsAndVars.XYSamplePair, pointF.X, pointF.Y,
+                        CommonFunctionsAndVars.PrConfig.XYSpecialSpeed, FunctionsAndVars.AbsMove, 50000));
+                    if (!moveSuccess)
+                        throw new Exception(string.Format("Motion Fault - Machine Mapping Move to X,Y = {0},{1}", pointF.X, pointF.Y));
+
+                    if (bool.Parse(CommonFunctionsAndVars.PrConfig.HeightSensorAttached))
+                    {
+                        double measurement = FunctionsAndVars.HeightSensor.SpotMeasure(3);
+
+                        if (!double.IsNaN(measurement))
+                        {
+                            File.AppendAllText(chuckPath, string.Format("{0}\t{1}\t{2}\n", pointF.X, pointF.Y, measurement));
+                        }
+                    }
+                    else
+                    {
+                        Random random = new Random();
+                        File.AppendAllText(chuckPath, string.Format("{0}\t{1}\t{2}\n", pointF.X, pointF.Y, random.NextDouble() * (2.5 - 2.4) + 2.4)); // (Max - Min) - Min
+                    }
+
+                    if (!FunctionsAndVars.RunScan)
+                        return;
+                }
+
+                FilterData(chuck);
+            }
+
+            My.MyProject.Forms.FormMain.StatusPanel.BackColor = Color.WhiteSmoke;
+            My.MyProject.Forms.FormMain.lblStatus.Text = "Machine Mapping Complete";
+        }
+
+        private void FilterData(ChuckTypes chuck)
+        {
+            // Check for data
+            string chuckPath = _LogPath + chuck.ToString() + "Map.txt";
+            if (!File.Exists(chuckPath))
+            {
+                return;
+            }
+
+            // Get data
+            string[] readText = File.ReadAllLines(chuckPath);
+            double sum = 0.0;
+            int count = 0;
+            foreach (string line in readText)
+            {
+                string[] values = line.Split('\t');
+                int x, y;
+                if (!CenterMounted)
+                {
+                    x = (int)((double.Parse(values[0]) - (float)CommonFunctionsAndVars.PrConfig.HeightSensePosX) / Increment);
+                    y = (int)((double.Parse(values[1]) - (float)CommonFunctionsAndVars.PrConfig.HeightSensePosY) / Increment);
+                }
+                else
+                {
+                    x = int.Parse(values[0]) / Increment;
+                    y = int.Parse(values[1]) / Increment;
+                }
+                double z = double.Parse(values[2]);
+                sum += z;
+                count++;
+                _ChuckData[(int)chuck][y, x] = z;
+            }
+            _Averages[(int)chuck] = sum / count;
+
+            // Clean data
+            for (int j = 0; j < _Steps.Y; j++)
+            {
+                for (int i = 0; i < _Steps.X; i++)
+                {
+                    CheckGlobalOutlier(ref _ChuckData[(int)chuck][j, i], (int)chuck);
+                    RemoveAverage(ref _ChuckData[(int)chuck][j, i], (int)chuck);
+                }
+            }
+
+            // Linear fit
+            for (int j = 0; j < _Steps.Y; j++)
+            {
+                List<double> lineX = new List<double>();
+                List<double> lineData = new List<double>();
+                for (int i = 0; i < _Steps.X; i++)
+                {
+                    double data = _ChuckData[(int)chuck][j, i];
+                    if (data != 0)
+                    {
+                        lineX.Add(i);
+                        lineData.Add(_ChuckData[(int)chuck][j, i]);
+                    }
+                }
+
+                if (lineData.Count < 2) // Not enough data for line fitting
+                {
+                    continue;
+                }
+
+                var line = MathNet.Numerics.Fit.Line(lineX.ToArray(), lineData.ToArray());
+                for (int i = 0; i < lineData.Count; i++)
+                {
+                    _ChuckData[(int)chuck][j, (int)lineX[i]] = line.Item2 * lineX[i] + line.Item1;
+                }
+            }
+
+            // Export
+            for (int j = 0; j < _Steps.Y; j++)
+            {
+                for (int i = 0; i < _Steps.X; i++)
+                {
+                    if (_ChuckData[(int)chuck][j, i] != 0)
+                    {
+                        FilteredData[j, i] = _ChuckData[(int)chuck][j, i];
+                    }
+                }
+            }
+        }
+
+        private void CheckGlobalOutlier(ref double x, int i)
+        {
+            if (x != 0 && (Math.Abs(x - _Averages[i]) / ((x + _Averages[i]) / 2)) > _OutlierThreshold)
+                x = _Averages[i];
+        }
+
+        private void RemoveAverage(ref double x, int i)
+        {
+            if (x != 0)
+                x -= _Averages[i];
+        }
+
+        /// <summary>
+        /// Load existing scans and filter the data
+        /// </summary>
+        public void ExternalFilterData()
+        {
+            foreach (ChuckTypes chuck in _DesiredChucks)
+            {
+                FilterData(chuck);
+            }
+        }
+
+        /// <summary>
+        /// Export filtered data to file in A3200 2D cal file format for Z and Zc.
+        /// </summary>
+        /// <param name="path"></param>
+        public void SaveA3200CalFile(string path)
+        {
+            string header = string.Format(":START2D {0} {1} {2} {3} -{4} -{4} {5}\n:START2D POSUNIT=METRIC CORUNIT=METRIC\n\n", 
+                (CommonFunctionsAndVars.PrConfig.SampleYAxis + 1).ToString(),
+                (CommonFunctionsAndVars.PrConfig.SampleXAxis + 1).ToString(),
+                (CommonFunctionsAndVars.PrConfig.SampleZAxis + 1).ToString(),
+                (CommonFunctionsAndVars.PrConfig.OpticsZAxis + 1).ToString(),
+                Increment, _Steps.X + 2);
+
+            string body = BorderLine();
+            for (int j = 0; j < _Steps.Y; j++)
+            {
+                body += CalStr(0.0);
+                for (int i = 0; i < _Steps.X; i++)
+                {
+                    body += CalStr(FilteredData[j, i]);
+                }
+                body += CalStr(0.0);
+                TabToLine(ref body);
+            }
+            body += BorderLine();
+
+            string footer = "\n:END";
+
+            File.WriteAllText(path, header + body + footer);
+        }
+
+        private string CalStr(double z)
+        {
+            return string.Format("{0:#,0.000}\t{0:#,0.000}\t", z);
+        }
+
+        private void TabToLine(ref string s)
+        {
+            int place = s.LastIndexOf('\t');
+            if (place == -1)
+                return;
+            s = s.Remove(place, 1).Insert(place, "\n");
+        }
+
+        private string BorderLine()
+        {
+            string line = "";
+            for (int i = 0; i < _Steps.X + 2; i++)
+            {
+                line += CalStr(0.0);
+            }
+            TabToLine(ref line);
+            return line;
+        }
+    }
+}

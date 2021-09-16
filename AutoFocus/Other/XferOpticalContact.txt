@@ -1,0 +1,265 @@
+﻿using Aerotech.A3200.Status;
+using Cognex.VisionPro;
+using Cognex.VisionPro.PMAlign;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using XferCommon;
+using XferPrintLib;
+
+namespace XferPrint.Utility
+{
+    static class OpticalContact
+    {
+        public static double AutoLevelRange;
+
+        private static bool SAVEIMAGE = true; // Make it easy to debug customer issues
+
+        private static bool _InContact = false;
+        private static Rectangle _Pic = new Rectangle(1148, 949, 150, 150); // Default for Basler Ace - is overwritten at runtime
+        private static Color _SetColor, _SetSafetyColor, _Color; // TODO load these from images each time
+        private static bool _FirstPost;
+        
+        public static void UpdatePosition()
+        {
+            _InContact = false;
+            GetData();
+            _InContact = CheckContact();
+            Application.DoEvents();
+        }
+
+        public static Color SetColor()
+        {
+            GetStampRegion(); // Update Pic rectangle in case stamp pattern was edited
+            GetData();
+            _SetColor = _Color;
+            CommonFunctionsAndVars.WriteEventLog("AutoLevel Set: ", _SetColor.ToString());
+
+            if (SAVEIMAGE)
+            {
+                Bitmap output = My.MyProject.Forms.frmVision.SnapLiveImage().ToBitmap();
+                output.Save(@"C:\XferPrint\Data\Images\AutoLevelSet.png");
+            }
+
+            return _SetColor;
+        }
+
+        public static Color SetSafetyColor()
+        {
+            GetStampRegion(); // Update Pic rectangle in case stamp pattern was edited
+            GetData();
+            _SetSafetyColor = _Color;
+            CommonFunctionsAndVars.WriteEventLog("AutoLevel Safety Set: ", _SetSafetyColor.ToString());
+
+            if (SAVEIMAGE)
+            {
+                Bitmap output = My.MyProject.Forms.frmVision.SnapLiveImage().ToBitmap();
+                output.Save(@"C:\XferPrint\Data\Images\AutoLevelSafetySet.png");
+            }
+
+            return _SetSafetyColor;
+        }
+
+        private static int GetColorDiff()
+        {
+            int R = Math.Abs(_SetColor.R - _Color.R);
+            int G = Math.Abs(_SetColor.G - _Color.G);
+            int B = Math.Abs(_SetColor.B - _Color.B);
+            return R + G + B;
+        }
+
+        private static int GetSafetyColorDiff()
+        {
+            int R = Math.Abs(_SetSafetyColor.R - _Color.R);
+            int G = Math.Abs(_SetSafetyColor.G - _Color.G);
+            int B = Math.Abs(_SetSafetyColor.B - _Color.B);
+            return R + G + B;
+        }
+
+        private static void GetStampRegion()
+        {
+            if (CommonFunctionsAndVars.ProcessRecipeLoaded)
+            {
+                CogPMAlignPattern pat = (CogPMAlignPattern)CogSerializer.LoadObjectFromFile(CommonFunctionsAndVars.XferRecipe.Stamp.StampRegPatternFilename);
+                Bitmap stampBMP = pat.GetTrainedPatternImage().ToBitmap();
+                Bitmap img = new Bitmap(My.MyProject.Forms.frmVision.SnapLiveImage().ToBitmap());
+                Point screenCenter = new Point(img.Width / 2, img.Height / 2);
+                _Pic = new Rectangle(screenCenter.X - stampBMP.Width / 4, screenCenter.Y - stampBMP.Height / 4, stampBMP.Width / 2, stampBMP.Height / 2);
+                Graphics g = Graphics.FromImage(img);
+                g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Green)), _Pic);
+                img.Save(@"C:\XferPrint\Data\Images\AutoLevelRegion.png");
+            }  
+        }
+
+        private static bool CheckContact()
+        {
+            if (GetColorDiff() - GetSafetyColorDiff() <= 0)
+                return true;
+            else
+                return false;
+        }
+
+        private static void GetData()
+        {
+            Bitmap img = My.MyProject.Forms.frmVision.SnapLiveImage().ToBitmap();
+
+            List<int> pixelValsR = new List<int>();
+            List<int> pixelValsG = new List<int>();
+            List<int> pixelValsB = new List<int>();
+            for (int i = _Pic.Left; i < _Pic.Right; i += 5)
+            {
+                for (int j = _Pic.Top; j < _Pic.Bottom; j += 5)
+                {
+                    Color c = img.GetPixel(i, j);
+                    pixelValsR.Add(c.R);
+                    pixelValsG.Add(c.G);
+                    pixelValsB.Add(c.B);
+                }
+            }
+
+            _Color = Color.FromArgb((int)pixelValsR.Average(), (int)pixelValsG.Average(), (int)pixelValsB.Average());
+        }
+
+        public async static Task<bool> AutoLevel(TableLayoutControlCollection controls)
+        {
+            _FirstPost = true;
+
+            double[][] planePositions = new double[3][];
+            int planeIDX = 0;
+
+            foreach (Control control in controls)
+            {
+                if (control.BackColor == Color.Bisque && FunctionsAndVars.RunAutoStampLevel)
+                {
+                    control.BackColor = Color.LightGreen;
+
+                    bool postLevel = await LevelPost(control.Text);
+                    if (postLevel)
+                    {
+                        planePositions[planeIDX] = new double[] { FunctionsAndVars.myController.GetAxisStatus(CommonFunctionsAndVars.PrConfig.OpticsXAxis, AxisStatusSignal.PositionFeedback),
+                            FunctionsAndVars.myController.GetAxisStatus(CommonFunctionsAndVars.PrConfig.OpticsYAxis, AxisStatusSignal.PositionFeedback),
+                            FunctionsAndVars.myController.GetAxisStatus(CommonFunctionsAndVars.PrConfig.SampleZAxis, AxisStatusSignal.PositionFeedback) };
+                        control.BackColor = Color.Green;
+                        planeIDX++;
+                    }
+                    else
+                        return false;
+                }
+                else if (!FunctionsAndVars.RunAutoStampLevel)
+                {
+                    return false;
+                }
+            }
+
+            if (!FunctionsAndVars.RunAutoStampLevel)
+                return false;
+
+            double[] zPositions = new double[3];
+            for (int i = 0; i < 3; i++)
+            {
+                zPositions[i] = planePositions[i][2];
+            }
+            AutoLevelRange = Math.Round((zPositions.Max() - zPositions.Min()) * 1000);
+
+            var leveler = new cStampLeveling(planePositions);
+            PointF calcTheta = leveler.GetTheta();
+            if (!leveler.validPlane)
+                return false;
+
+            PointF newTheta = new PointF(calcTheta.X + (float)FunctionsAndVars.ConvertTxPosition_MMToDeg((float)FunctionsAndVars.myController.GetAxisStatus(CommonFunctionsAndVars.PrConfig.RotaryTxAxis, AxisStatusSignal.PositionFeedback)),
+                calcTheta.Y + (float)(-1 * FunctionsAndVars.ConvertTyPosition_MMToDeg((float)FunctionsAndVars.myController.GetAxisStatus(CommonFunctionsAndVars.PrConfig.RotaryTyAxis, AxisStatusSignal.PositionFeedback))));
+
+            float THX = FunctionsAndVars.ConvertTxPosition_DegToMM(newTheta.X);
+            double THY = -1 * FunctionsAndVars.ConvertTyPosition_DegToMM(newTheta.Y);
+
+            // Move Z up for safety, then to calculated theta position
+            await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.SampleZAxis, 0.05d, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 5000);
+            await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis, 0.05d, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 5000);
+            await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.RotaryTxAxis, THX, FunctionsAndVars.RotarySpeed[FunctionsAndVars.Speeds.Fast], FunctionsAndVars.AbsMove, 5000);
+            await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.RotaryTyAxis, THY, FunctionsAndVars.RotarySpeed[FunctionsAndVars.Speeds.Fast], FunctionsAndVars.AbsMove, 5000);
+
+            return true;
+        }
+
+        
+        private async static Task<bool> LevelPost(string post)
+        {
+            bool moveToPost = await FunctionsAndVars.GotoStampPostAsync(post);
+            await Task.Delay(1000);
+
+            if (!moveToPost || !FunctionsAndVars.RunAutoStampLevel)
+                return false;
+
+            bool registerPost = await FunctionsAndVars.ucManualMode.RegistrationFindAndCenter(PatternLocations.Stamp, false);
+            await Task.Delay(1000);
+
+            if (!registerPost || !FunctionsAndVars.RunAutoStampLevel)
+                return false;
+
+            if (_FirstPost)
+            {
+                await SpeedyApproach();
+            }
+
+            while (CheckContact() == true) // Move post up and away from contact before next leveling operation
+            {
+                if (!FunctionsAndVars.RunAutoStampLevel) // User stop
+                    return false;
+
+                await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.SampleZAxis, 0.005d, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 500);
+                await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis, 0.005d, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 500);
+                UpdatePosition();
+            }
+
+            while (true)
+            {
+                await Task.Delay(100);
+                UpdatePosition();
+
+                if (!FunctionsAndVars.RunAutoStampLevel) // User stop
+                    return false;
+
+                if (!_InContact) // Move down 1 um if not yet in contact
+                {
+                    await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.SampleZAxis, -0.001, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 500);
+                    await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis, -0.001, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 500);
+                }
+                else
+                {
+                    await Task.Delay(500);
+                    break;
+                }
+            }
+            return true;
+        }
+
+        private async static Task SpeedyApproach()
+        {
+            while (true)
+            {
+                await Task.Delay(100);
+                UpdatePosition();
+
+                if (!FunctionsAndVars.RunAutoStampLevel) // User stop
+                    return;
+
+                if (!_InContact) // Move down 5 um if not yet in contact
+                {
+                    await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.SampleZAxis, -0.005, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 500);
+                    await FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis, -0.005, CommonFunctionsAndVars.PrConfig.XYSpeedF, FunctionsAndVars.IncMove, 500);
+                }
+                else
+                {
+                    await Task.Delay(500);
+                    break;
+                }
+            }
+
+            _FirstPost = false;
+        }
+    }
+}

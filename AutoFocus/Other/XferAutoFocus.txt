@@ -1,0 +1,317 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using XferCommon;
+using MathNet.Numerics.Statistics;
+using Cognex.VisionPro.PMAlign;
+using Cognex.VisionPro;
+using System.Windows.Forms;
+using XferPrint.Drivers.Hardware.Camera;
+
+namespace XferPrint.Utility
+{
+    static class XferAutoFocus
+    {
+        private static bool SAVEIMAGE = false; // For testing grid
+        private static double _GridSize; // n x n grid
+        private static int _ScanSize, _Wid, _Hgt;
+        private static double _ImageScale = 0.2;
+        private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
+        private const int _DefaultLoopStepNum = 3;
+        
+        public static void ToggleAutoFocusState(bool currentlyRunning)
+        {
+            FunctionsAndVars.RunFocusLoop = !currentlyRunning;
+        }
+
+        private static double GetBestPosition(double[] scores, double[] positions)
+        {
+            bool isEmpty = scores.All(x => x.Equals(null));
+            if (isEmpty)
+            {
+                return 0.0;
+            }
+
+            return positions[scores.ToList().IndexOf(scores.Max())];
+        }
+
+        private static void BitmapCrop(Rectangle crop, Bitmap src, ref Bitmap target)
+        {
+            using var g = Graphics.FromImage(target);
+            g.DrawImage(src, new Rectangle(0, 0, crop.Width, crop.Height), crop, GraphicsUnit.Pixel);
+        }
+
+        // Gets grid pixels and then scores the image
+        private static double ScoreImageFocus(Bitmap img)
+        {
+            _ScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            if (_ScanSize <= 0) _ScanSize = 1;
+            _Wid = img.Width / _ScanSize;
+            _Hgt = img.Height / _ScanSize;
+
+            // Get red values for every pixel in a 2D array
+            double[,] PxlVals = new double[_Wid, _Hgt];
+            for (int i = 0; i < _Wid; i++)
+            {
+                for (int j = 0; j < _Hgt; j++)
+                {
+                    PxlVals[i, j] = img.GetPixel(i * _ScanSize, j * _ScanSize).R;
+                }
+            }
+
+            return GetNeighborSharpness(PxlVals);
+        }
+
+        // The core of AutoFocus
+        private static double GetNeighborSharpness(double[,] PxlVals)
+        {
+            List<double> PDiff = new List<double>();
+            for (int i = 0; i < _Wid; i++)
+            {
+                for (int j = 0; j < _Hgt; j++)
+                {
+                    double LocalPDiff = 0.0;
+                    for (int k = i - _ScanSize; k <= i + _ScanSize; k++)
+                    {
+                        for (int l = j - _ScanSize; l <= j + _ScanSize; l++)
+                        {
+                            if (k > 0 && k < _Wid - 1 && l > 0 && l < _Hgt - 1)
+                            {
+                                double p1 = PxlVals[i, j];
+                                double p2 = PxlVals[k, l];
+                                if (p1 == 0 && p2 == 0)
+                                {
+                                    continue;
+                                }
+                                LocalPDiff += Math.Abs(p1 - p2) / ((p1 + p2) / 2);
+                            }
+                        }
+                    }
+                    PDiff.Add(LocalPDiff / (_ScanSize * _ScanSize));
+                }
+            }
+
+            // Return average sharpness
+            double score = PDiff.Sum() / PDiff.Count;
+            return score;
+        }
+
+        // Scores an image based off the tiles from a trained grid only
+        private static double ScoreImageGrid(Bitmap img, int[] tiles)
+        {
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            int tileIDX = 0;
+            List<double> scores = new List<double>();
+
+            for (int i = 0; i < img.Width; i += tileScanSize)
+            {
+                for (int j = 0; j < img.Height; j += tileScanSize)
+                {
+                    if (tiles.Contains(tileIDX))
+                    {
+                        Bitmap tile = new Bitmap(tileScanSize, tileScanSize);
+                        BitmapCrop(new Rectangle(i, j, tileScanSize, tileScanSize), img, ref tile);
+                        scores.Add(ScoreImageFocus(tile));
+                    }
+                    tileIDX++;
+
+                    // Loop until all needed tiles are scored
+                    if (scores.Count == tiles.Length)
+                        break;
+                }
+            }
+
+            return scores.Sum() / scores.Count();
+        }
+
+        // Returns the tiles within a grid that have entropies in the highest 2 histogram bins
+        private static int[] GetTiles(Bitmap img, Rectangle stampArea)
+        {
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            Dictionary<int, double> entropyDict = new Dictionary<int, double>();
+            int entropyIDX = 0;
+
+            for (int i = 0; i < img.Width; i += tileScanSize)
+            {
+                for (int j = 0; j < img.Height; j += tileScanSize)
+                {
+                    if (stampArea.Contains(new Point(i, j)))
+                    {
+                        entropyIDX++;
+                        continue;
+                    }
+
+                    Bitmap tile = new Bitmap(tileScanSize, tileScanSize);
+                    BitmapCrop(new Rectangle(i, j, tileScanSize, tileScanSize), img, ref tile);
+                    List<double> entropyList = new List<double>();
+                    for (int k = 0; k < tile.Width; k++)
+                    {
+                        for (int l = 0; l < tile.Height; l++)
+                        {
+                            entropyList.Add(tile.GetPixel(k, l).ToArgb());
+                        }
+                    }
+                    entropyDict.Add(entropyIDX, (Statistics.Entropy(entropyList.ToArray())));
+                    entropyIDX++;
+                }
+            }
+
+            // Sort tiles by highest entropy to lowest
+            IEnumerable<int> sortedTiles = entropyDict.OrderBy(x => x.Value).Select(x => x.Key).Reverse();
+            // Add indexes of percent of tiles desired to array
+            int[] tiles = sortedTiles.Take((int)(sortedTiles.Count() * _AmountDataDesired)).ToArray();
+            return tiles;
+        }
+
+        /// <summary>
+        /// Coarse then fine AutoFocus
+        /// </summary>
+        /// <param name="camera"></param>
+        /// <param name="NumSteps"></param>
+        /// <param name="ExcludeStamp"></param>
+        /// <returns></returns>
+        public async static System.Threading.Tasks.Task RunFocusLoop(IcCamera camera, int NumSteps = _DefaultLoopStepNum, bool ExcludeStamp = false)
+        {
+            if (FunctionsAndVars.CameraID == FunctionsAndVars.LoCam)
+                return;
+
+            await System.Threading.Tasks.Task.Run(() => ToggleAutoFocusState(false));
+
+            await RunFocus(camera, 0.015, NumSteps, ExcludeStamp); // Coarse
+
+            // Check to see if user wants to stop
+            if (!FunctionsAndVars.RunFocusLoop)
+                return;
+
+            await RunFocus(camera, 0.005, NumSteps, ExcludeStamp); // Fine
+        }
+
+        /// <summary>
+        /// Aerotech and Cognex implementation of AutoFocus
+        /// </summary>
+        /// <param name="camera"></param>
+        /// <param name="FocusStep"></param>
+        /// <param name="NumSteps"></param>
+        /// <param name="ExcludeStamp"></param>
+        /// <returns></returns>
+        public async static System.Threading.Tasks.Task RunFocus(IcCamera camera, double FocusStep, int NumSteps, bool ExcludeStamp = false)
+        {
+            if (FunctionsAndVars.CameraID == FunctionsAndVars.LoCam)
+                return;
+
+            _GridSize = (int)CommonFunctionsAndVars.PrConfig.AutoFocusArea;
+
+            double StartingPoint = FunctionsAndVars.GetCurrentPosition((ushort)CommonFunctionsAndVars.PrConfig.OpticsZAxis); // Logs the current position of ZOptics
+            List<double> scores = new List<double>();
+            List<double> positions = new List<double>();
+            bool movesuccess;
+
+
+            Bitmap image = camera.SnapLiveImage().ToBitmap();
+            Bitmap resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+
+            Rectangle stampRectangle = new Rectangle(-1, -1, 0, 0); // Init a rect that won't intersect with anything
+            Rectangle resizedStampRectangle = stampRectangle;
+
+            if (ExcludeStamp)
+            {
+                CogPMAlignPattern pat = (CogPMAlignPattern)CogSerializer.LoadObjectFromFile(CommonFunctionsAndVars.XferRecipe.Stamp.StampRegPatternFilename);
+
+                Bitmap stampBMP = pat.GetTrainedPatternImage().ToBitmap();
+                stampRectangle = new Rectangle(image.Width / 2 - stampBMP.Width, image.Height / 2 - stampBMP.Height,
+                    stampBMP.Width * 2, stampBMP.Height * 2); // Double the stamp rect for the original image
+
+                Bitmap resizedStampBMP = new Bitmap(stampBMP, new Size((int)Math.Round(stampBMP.Width * _ImageScale), (int)Math.Round(stampBMP.Height * _ImageScale)));
+                resizedStampRectangle = new Rectangle(resizedImage.Width / 2 - resizedStampBMP.Width, resizedImage.Height / 2 - resizedStampBMP.Height,
+                    resizedStampBMP.Width * 2, resizedStampBMP.Height * 2); // Double the stamp rect for the scaled image
+            }
+
+            int[] focusTiles = GetTiles(resizedImage, resizedStampRectangle);
+
+            try
+            {
+                CommonFunctionsAndVars.WriteEventLog("Run Focus Loop Started", "");
+                // Move to lowest step and work way up
+                for (int i = -NumSteps; i <= NumSteps; i++)
+                {
+                    // Check to see if user wants to stop
+                    if (!FunctionsAndVars.RunFocusLoop)
+                        return;
+
+                    double DeltaMovement = i * FocusStep;
+                    movesuccess = await System.Threading.Tasks.Task.Run(() => FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis,
+                        (StartingPoint + DeltaMovement), CommonFunctionsAndVars.PrConfig.ZSpeedF, FunctionsAndVars.AbsMove, 5000));
+                    if (!movesuccess)
+                        throw new Exception("Motion Fault-Move to Focus Step");
+
+                    // Take image, score and save position
+                    image = camera.SnapLiveImage().ToBitmap();
+                    resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+                    double score = await System.Threading.Tasks.Task.Run(() => ScoreImageGrid(resizedImage, focusTiles));
+                    scores.Add(score);
+                    //System.Diagnostics.Debug.Write("Score = " + score.ToString());
+                    positions.Add(FunctionsAndVars.GetCurrentPosition((ushort)CommonFunctionsAndVars.PrConfig.OpticsZAxis));
+                }
+                CommonFunctionsAndVars.WriteEventLog("Run Focus Loop Ended", "");
+
+                double BestPosition = GetBestPosition(scores.ToArray(), positions.ToArray());
+                //System.Diagnostics.Debug.Write("BestPosition = " + BestPosition.ToString());
+                if (BestPosition == 0.0)
+                {
+                    CommonFunctionsAndVars.WriteEventLog("Moving to Start Position: ", string.Concat(StartingPoint));
+                    // AutoFocus Fail: No discernible change in focus, return the ZOptic to the original position
+                    movesuccess = await System.Threading.Tasks.Task.Run(() => FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis,
+                        StartingPoint, CommonFunctionsAndVars.PrConfig.ZSpeedM, FunctionsAndVars.AbsMove, 5000));
+                    if (!movesuccess)
+                        throw new Exception("Motion Fault-Move to Best Focus");
+                    return;
+                }
+
+                CommonFunctionsAndVars.WriteEventLog("Moving to Best Position: ", string.Concat(BestPosition));
+                // AutoFocus Success: Move the ZOptic to the best position
+                movesuccess = await System.Threading.Tasks.Task.Run(() => FunctionsAndVars.MoveWaitAsync(CommonFunctionsAndVars.PrConfig.OpticsZAxis,
+                    BestPosition, CommonFunctionsAndVars.PrConfig.ZSpeedF, FunctionsAndVars.AbsMove, 5000));
+                if (!movesuccess)
+                    throw new Exception("Motion Fault-Move to Best Focus");
+
+                if (SAVEIMAGE)
+                {
+                    Bitmap output = My.MyProject.Forms.frmVision.SnapLiveImage().ToBitmap();
+                    HighlightTiles(ref output, focusTiles, stampRectangle);
+                    output.Save(@"C:\XferPrint\Data\Images\AutoFocus.png");
+
+                    CommonFunctionsAndVars.WriteEventLog("Saving image", "");
+                }
+            }
+            catch (Exception ex)
+            {
+                // AutoFocus Fail: Could not find focal plane
+                CommonFunctionsAndVars.WriteEventLog("ERROR: FocusLoop ", ex.Message);
+            }
+        }
+
+        // Colorize the used tiles from the grid training image
+        public static void HighlightTiles(ref Bitmap img, int[] tiles, Rectangle stampRectangle)
+        {
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            int tileIDX = 0;
+            using (Graphics g = Graphics.FromImage(img))
+            {
+                for (int i = 0; i < img.Width; i += tileScanSize)
+                {
+                    for (int j = 0; j < img.Height; j += tileScanSize)
+                    {
+                        if (tiles.Contains(tileIDX))
+                        {
+                            g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Green)), new Rectangle(i, j, tileScanSize, tileScanSize));
+                        }
+                        tileIDX++;
+                    }
+                }
+
+                g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Red)), stampRectangle);
+            }
+        }
+    }
+}
