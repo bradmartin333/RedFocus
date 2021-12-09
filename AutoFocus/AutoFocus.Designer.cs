@@ -29,11 +29,9 @@ namespace AutoFocus
         /// </summary>
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
-            this.Plot = new ScottPlot.FormsPlot();
             this.Pbx = new System.Windows.Forms.PictureBox();
-            this.FocusWorker = new System.ComponentModel.BackgroundWorker();
+            this.rtb = new System.Windows.Forms.RichTextBox();
             this.tableLayoutPanel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.Pbx)).BeginInit();
             this.SuspendLayout();
@@ -44,8 +42,8 @@ namespace AutoFocus
             this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 20F));
             this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 20F));
-            this.tableLayoutPanel1.Controls.Add(this.Plot, 0, 1);
             this.tableLayoutPanel1.Controls.Add(this.Pbx, 0, 0);
+            this.tableLayoutPanel1.Controls.Add(this.rtb, 0, 1);
             this.tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
             this.tableLayoutPanel1.Name = "tableLayoutPanel1";
@@ -55,20 +53,9 @@ namespace AutoFocus
             this.tableLayoutPanel1.Size = new System.Drawing.Size(322, 442);
             this.tableLayoutPanel1.TabIndex = 0;
             // 
-            // Plot
-            // 
-            this.Plot.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.Plot.Location = new System.Drawing.Point(4, 224);
-            this.Plot.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
-            this.Plot.Name = "Plot";
-            this.Plot.Size = new System.Drawing.Size(314, 215);
-            this.Plot.TabIndex = 1;
-            this.Plot.Visible = false;
-            // 
             // Pbx
             // 
             this.Pbx.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.Pbx.Image = global::AutoFocus.Properties.Resources.RunSPOT;
             this.Pbx.Location = new System.Drawing.Point(3, 3);
             this.Pbx.Name = "Pbx";
             this.Pbx.Size = new System.Drawing.Size(316, 215);
@@ -76,10 +63,14 @@ namespace AutoFocus
             this.Pbx.TabIndex = 2;
             this.Pbx.TabStop = false;
             // 
-            // FocusWorker
+            // rtb
             // 
-            this.FocusWorker.DoWork += new System.ComponentModel.DoWorkEventHandler(this.FocusWorker_DoWork);
-            this.FocusWorker.RunWorkerCompleted += new System.ComponentModel.RunWorkerCompletedEventHandler(this.FocusWorker_RunWorkerCompleted);
+            this.rtb.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.rtb.Location = new System.Drawing.Point(3, 224);
+            this.rtb.Name = "rtb";
+            this.rtb.Size = new System.Drawing.Size(316, 215);
+            this.rtb.TabIndex = 3;
+            this.rtb.Text = "";
             // 
             // AutoFocus
             // 
@@ -98,8 +89,7 @@ namespace AutoFocus
         #endregion
 
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
-        private ScottPlot.FormsPlot Plot;
         private System.Windows.Forms.PictureBox Pbx;
-        private System.ComponentModel.BackgroundWorker FocusWorker;
+        private System.Windows.Forms.RichTextBox rtb;
     }
 }
