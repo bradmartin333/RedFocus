@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -16,19 +17,21 @@ namespace AutoFocus
         private double _MaxScore;
         private int _BestIDX;
         private string _BestFileName;
-        private double _ImageScale = 0.2; // EDITABLE
+        private double _ImageScale = 1; // EDITABLE
         private string _Path = ""; // EDITBALE
+        private Stopwatch StopWatch = new Stopwatch();
 
         public AutoFocus()
         {
             InitializeComponent();
 
             string startupPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
-            _Files = Directory.GetFiles(startupPath + "/Examples/Test4");
+            _Files = Directory.GetFiles(startupPath + "/Examples/Test7");
             
             //_Files = Directory.GetFiles(_Path);
             
             FocusWorker.RunWorkerAsync();
+            StopWatch.Start();
         }
 
         private void MakePlot()
@@ -45,7 +48,7 @@ namespace AutoFocus
 
         private void ShowImage()
         {
-            Bitmap bitmap = new Bitmap(Image.FromFile(_Files[_BestIDX]));
+            Bitmap bitmap = new Bitmap(Image.FromFile(_Files[0]));
             HighlightTiles(ref bitmap, _FocusTiles); // Show what grid was used
             Pbx.Image = bitmap;
         }
@@ -60,23 +63,24 @@ namespace AutoFocus
             {
                 image = new Bitmap(Image.FromFile(f));
                 resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
-                _Scores.Add(ScoreImageGrid(resizedImage, _FocusTiles));
+                //_Scores.Add(ScoreImageGrid(resizedImage, _FocusTiles));
             }
 
             e.Result = true; // Complete the background job
+            StopWatch.Stop();
         }
 
         private void FocusWorker_RunWorkerCompleted(object sender, System.ComponentModel.RunWorkerCompletedEventArgs e)
         {
-            _MaxScore = _Scores.Max(); // Max is usually the best
-            _BestIDX = _Scores.IndexOf(_MaxScore);
-            _BestFileName = _Files[_BestIDX];
+            //_MaxScore = _Scores.Max(); // Max is usually the best
+            //_BestIDX = _Scores.IndexOf(_MaxScore);
+            //_BestFileName = _Files[0];
 
-            MakePlot();
+            //MakePlot();
             ShowImage();
 
-            FileInfo fileInfo = new FileInfo(_BestFileName);
-            Text = fileInfo.Name;
+            //FileInfo fileInfo = new FileInfo(_BestFileName);
+            Text = StopWatch.Elapsed.ToString();
         }
     }
 }

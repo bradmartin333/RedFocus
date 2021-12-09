@@ -157,7 +157,7 @@ namespace AutoFocus
                     {
                         if (tiles.Contains(tileIDX))
                         {
-                            g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Green)), new Rectangle(i, j, tileScanSize, tileScanSize));
+                            g.FillRectangle(new SolidBrush(Color.FromArgb(150, Color.Green)), new Rectangle(i, j, tileScanSize, tileScanSize));
                         }
                         tileIDX++;
                     }
