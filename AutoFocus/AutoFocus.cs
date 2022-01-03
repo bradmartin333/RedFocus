@@ -35,7 +35,7 @@ namespace AutoFocus
             Plot.plt.PlotPoint(_BestIDX, _MaxScore);
             Plot.plt.XLabel("Image #");
             Plot.plt.YLabel("Focus Score");
-            Plot.plt.Title(string.Format("Using {0} Tile{1}", _NumTiles, _NumTiles > 1 ? "s" : ""));
+            Plot.plt.Title(string.Format("Using {0} Tile{1}", _FocusTiles.Length, _FocusTiles.Length > 1 ? "s" : ""));
             Plot.Visible = true;
             Plot.ScrollWheelProcessor();
         }
