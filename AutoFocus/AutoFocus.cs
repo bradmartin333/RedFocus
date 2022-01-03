@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -16,7 +17,8 @@ namespace AutoFocus
         private double _MaxScore;
         private int _BestIDX;
         private string _BestFileName;
-        private double _ImageScale = 0.2; // EDITABLE
+        private double _ImageScale = 1; // EDITABLE
+        private Stopwatch _SW = new Stopwatch();
 
         public AutoFocus()
         {
@@ -24,7 +26,8 @@ namespace AutoFocus
 
             string startupPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
             _Files = Directory.GetFiles(startupPath + "/Examples/Test4");
-            
+
+            _SW.Start();
             FocusWorker.RunWorkerAsync();
         }
 
@@ -65,6 +68,8 @@ namespace AutoFocus
 
         private void FocusWorker_RunWorkerCompleted(object sender, System.ComponentModel.RunWorkerCompletedEventArgs e)
         {
+            _SW.Stop();
+
             _MaxScore = _Scores.Max(); // Max is usually the best
             _BestIDX = _Scores.IndexOf(_MaxScore);
             _BestFileName = _Files[_BestIDX];
@@ -73,7 +78,7 @@ namespace AutoFocus
             ShowImage();
 
             FileInfo fileInfo = new FileInfo(_BestFileName);
-            Text = fileInfo.Name;
+            Text = $"{fileInfo.Name}   {Math.Round(_SW.Elapsed.TotalSeconds, 3)}s";
         }
     }
 }
