@@ -10,44 +10,36 @@ namespace AutoFocus
 {
     static class Score
     {
-        private static double _GridSize = 15.0; // EDITABLE n x n grid
-        private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
+        private static int _GridSize = 15;
+        private static double _AmountDataDesired = 0.1;
 
-        /// <summary>
-        /// Scores an image based off the tiles from a trained grid only
-        /// </summary>
-        /// <param name="bmp"></param>
-        /// <param name="tiles"></param>
-        /// <returns></returns>
-        public static async Task<double> ScoreImageGridAsync(Bitmap bmp, int[] tiles)
+        public static double ScoreImageTiles(Bitmap bmp, (int, int)[] tiles)
         {
-            int tileScanSize = (int)(Math.Min(bmp.Height, bmp.Width) * (1.0 / _GridSize));
-            BitmapData bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            Rectangle bmpRect = new Rectangle(Point.Empty, bmp.Size);
+            BitmapData bmpData = bmp.LockBits(bmpRect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
             int size = bmpData.Stride * bmpData.Height;
             byte[] data = new byte[size];
             Marshal.Copy(bmpData.Scan0, data, 0, size);
 
-            Task[] tasks = new Task[tiles.Length];
+            Size scanSize = new Size(bmp.Width / _GridSize, bmp.Height / _GridSize);
             List<double> scores = new List<double>();
-            for (int i = 0; i < tiles.Length; i++)
+
+            foreach ((int, int) tile in tiles)
             {
-                Rectangle rect = new Rectangle(
-                    (int)(i / _GridSize * tileScanSize),
-                    (int)(i % _GridSize * tileScanSize),
-                    tileScanSize, tileScanSize);
-                tasks[i] = Task.Run(() => scores.Add(ScoreTileFocus(data, rect, bmpData.Stride)));
+                Rectangle rect = new Rectangle(tile.Item1, tile.Item2, scanSize.Width, scanSize.Height);
+                if (bmpRect.Contains(rect)) scores.Add(ScoreTile(data, rect, bmpData.Stride));
             }
 
-            await Task.WhenAll(tasks);
             scores.RemoveAll(x => double.IsNaN(x));
             return scores.Average();
         }
 
-        private static double ScoreTileFocus(byte[] data, Rectangle tile, int stride)
+        private static double ScoreTile(byte[] data, Rectangle tile, int stride)
         {
             List<double> PDiff = new List<double>();
-            for (int i = tile.Left; i < tile.Right; i += (int)(1 / _AmountDataDesired))
-                for (int j = tile.Top; j < tile.Bottom; j += (int)(1 / _AmountDataDesired))
+
+            for (int i = tile.Left; i < tile.Right; i++)
+                for (int j = tile.Top; j < tile.Bottom; j++)
                 {
                     int idx = i * 3 + j * stride;
                     if (idx + 2 < data.Length)
@@ -69,32 +61,32 @@ namespace AutoFocus
                         PDiff.Add(localPDiff / counts);
                     }
                 }
+
             return PDiff.Average();
         }
 
         // Returns the tiles within a grid that have entropies in the highest 2 histogram bins
-        public static int[] GetTiles(Bitmap bmp)
+        public static (int, int)[] GetTiles(Bitmap bmp)
         {
-            int tileScanSize = (int)(Math.Min(bmp.Height, bmp.Width) * (1.0 / _GridSize));
-            BitmapData bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            Rectangle bmpRect = new Rectangle(Point.Empty, bmp.Size);
+            BitmapData bmpData = bmp.LockBits(bmpRect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
             int size = bmpData.Stride * bmpData.Height;
             byte[] data = new byte[size];
             Marshal.Copy(bmpData.Scan0, data, 0, size);
 
-            Dictionary<int, double> entropyDict = new Dictionary<int, double>();
-            int entropyIDX = 0;
+            Size scanSize = new Size(bmp.Width / _GridSize, bmp.Height / _GridSize);
+            List<(int, int, double)> tiles = new List<(int, int, double)>();
 
-            for (int i = 0; i < bmp.Width; i += tileScanSize)
-                for (int j = 0; j < bmp.Height; j += tileScanSize)
+            for (int i = 0; i < bmp.Width; i += scanSize.Width)
+                for (int j = 0; j < bmp.Height; j += scanSize.Height)
                 {
-                    Rectangle tile = new Rectangle(i, j, tileScanSize, tileScanSize);
-                    entropyDict.Add(entropyIDX, GetRedCropEntropy(data, tile, bmpData.Stride));
-                    entropyIDX++;
+                    Rectangle rect = new Rectangle(i, j, scanSize.Width, scanSize.Height);
+                    if (bmpRect.Contains(rect)) tiles.Add((i, j, GetRedCropEntropy(data, rect, bmpData.Stride)));
                 }
 
-            IEnumerable<int> sortedTiles = entropyDict.OrderBy(x => x.Value).Select(x => x.Key).Reverse();
-            int[] tiles = sortedTiles.Take((int)(sortedTiles.Count() * _AmountDataDesired)).ToArray();
-            return tiles;
+            tiles.Sort((x, y) => y.Item3.CompareTo(x.Item3));
+            (int, int)[] selectedTiles = tiles.Take((int)(tiles.Count() * _AmountDataDesired)).Select(x => (x.Item1, x.Item2)).ToArray();
+            return selectedTiles;
         }
 
         /// <summary>
@@ -109,41 +101,37 @@ namespace AutoFocus
         /// <returns></returns>
         private static double GetRedCropEntropy(byte[] data, Rectangle tile, int stride)
         {
-            byte[] counts = new byte[256];
-
-            for (int i = tile.Left; i < tile.Right; i += (int)(1 / _AmountDataDesired))
-                for (int j = tile.Top; j < tile.Bottom; j += (int)(1 / _AmountDataDesired))
+            List<int> counts = new List<int>();
+            for (int i = tile.Left; i < tile.Right; i++)
+                for (int j = tile.Top; j < tile.Bottom; j++)
                 {
                     int idx = i * 3 + j * stride;
-                    if (idx + 2 < data.Length) counts[data[idx + 2]]++;
+                    if (idx + 2 < data.Length)
+                        counts.Add(data[idx + 2] << 16 | data[idx + 1] << 8 | data[idx]);
                 }
             double entropy = 0;
-            foreach (byte count in counts)
-                if (count != 0)
-                {
-                    double val = count / (double)(tile.Width * tile.Height);
-                    entropy -= val * Math.Log2(val);
-                }
+            foreach (var g in counts.GroupBy(i => i))
+            {
+                double val = g.Count() / (double)(tile.Width * tile.Height);
+                entropy -= val * Math.Log2(val);
+            }
             return entropy;
         }
 
         /// <summary>
         /// Will colorize with the grid layout of the grid training image
         /// </summary>
-        /// <param name="img"></param>
+        /// <param name="bmp"></param>
         /// <param name="tiles"></param>
-        public static void HighlightTiles(ref Bitmap img, int[] tiles)
+        public static void HighlightTiles(ref Bitmap bmp, (int, int)[] tiles)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
-            int tileIDX = 0;
-            using (Graphics g = Graphics.FromImage(img))
-                for (int i = 0; i < img.Width; i += tileScanSize)
-                    for (int j = 0; j < img.Height; j += tileScanSize)
-                    {
-                        if (tiles.Contains(tileIDX))
-                            g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Green)), new Rectangle(i, j, tileScanSize, tileScanSize));
-                        tileIDX++;
-                    }
+            Size scanSize = new Size(bmp.Width / _GridSize, bmp.Height / _GridSize);
+            using (Graphics g = Graphics.FromImage(bmp))
+                foreach ((int, int) tile in tiles)
+                {
+                    Rectangle rect = new Rectangle(tile.Item1, tile.Item2, scanSize.Width, scanSize.Height);
+                    g.FillRectangle(new SolidBrush(Color.FromArgb(100, Color.Green)), rect);
+                }
         }
     }
 }

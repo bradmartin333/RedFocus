@@ -12,12 +12,12 @@ namespace AutoFocus
     public partial class AutoFocus : Form
     {
         private string[] _Files;
-        private int[] _FocusTiles;
+        private (int, int)[] _FocusTiles;
         private List<double> _Scores = new List<double>();
         private double _MaxScore;
         private int _BestIDX;
         private string _BestFileName;
-        private double _ImageScale = 1; // EDITABLE
+        private double _ImageScale = 0.2; // EDITABLE
         private Stopwatch _SW = new Stopwatch();
 
         public AutoFocus()
@@ -46,21 +46,22 @@ namespace AutoFocus
         private void ShowImage()
         {
             Bitmap bitmap = new Bitmap(Image.FromFile(_Files[_BestIDX]));
-            HighlightTiles(ref bitmap, _FocusTiles); // Show what grid was used
-            Pbx.Image = bitmap;
+            Bitmap resizedImage = new Bitmap(bitmap, new Size((int)Math.Round(bitmap.Width * _ImageScale), (int)Math.Round(bitmap.Height * _ImageScale)));
+            HighlightTiles(ref resizedImage, _FocusTiles); // Show what grid was used
+            Pbx.Image = resizedImage;
         }
 
         private void FocusWorker_DoWork(object sender, System.ComponentModel.DoWorkEventArgs e)
         {
-            Bitmap image = new Bitmap(Image.FromFile(_Files[0]));
-            Bitmap resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+            Bitmap bitmap = new Bitmap(Image.FromFile(_Files[0]));
+            Bitmap resizedImage = new Bitmap(bitmap, new Size((int)Math.Round(bitmap.Width * _ImageScale), (int)Math.Round(bitmap.Height * _ImageScale)));
             _FocusTiles = GetTiles(resizedImage); // Get tiles from first image in directory
 
             foreach (string f in _Files) // Score each image
             {
-                image = new Bitmap(Image.FromFile(f));
-                resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
-                _Scores.Add(ScoreImageGridAsync(resizedImage, _FocusTiles).Result);
+                bitmap = new Bitmap(Image.FromFile(f));
+                resizedImage = new Bitmap(bitmap, new Size((int)Math.Round(bitmap.Width * _ImageScale), (int)Math.Round(bitmap.Height * _ImageScale)));
+                _Scores.Add(ScoreImageTiles(resizedImage, _FocusTiles));
             }
 
             e.Result = true; // Complete the background job
