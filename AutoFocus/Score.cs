@@ -10,7 +10,7 @@ namespace AutoFocus
 {
     static class Score
     {
-        private static double _GridSize = 30.0; // EDITABLE n x n grid
+        private static double _GridSize = 15.0; // EDITABLE n x n grid
         private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
 
         /// <summary>
