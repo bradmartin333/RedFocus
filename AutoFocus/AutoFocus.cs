@@ -17,7 +17,6 @@ namespace AutoFocus
         private int _BestIDX;
         private string _BestFileName;
         private double _ImageScale = 0.2; // EDITABLE
-        private string _Path = ""; // EDITBALE
 
         public AutoFocus()
         {
@@ -25,8 +24,6 @@ namespace AutoFocus
 
             string startupPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
             _Files = Directory.GetFiles(startupPath + "/Examples/Test4");
-            
-            //_Files = Directory.GetFiles(_Path);
             
             FocusWorker.RunWorkerAsync();
         }
