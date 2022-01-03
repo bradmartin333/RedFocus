@@ -10,7 +10,7 @@ namespace AutoFocus
 {
     static class Score
     {
-        private static double _GridSize = 15.0; // EDITABLE n x n grid
+        private static double _GridSize = 30.0; // EDITABLE n x n grid
         private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
 
         /// <summary>
@@ -19,7 +19,7 @@ namespace AutoFocus
         /// <param name="bmp"></param>
         /// <param name="tiles"></param>
         /// <returns></returns>
-        public static double ScoreImageGrid(Bitmap bmp, int[] tiles)
+        public static async Task<double> ScoreImageGridAsync(Bitmap bmp, int[] tiles)
         {
             int tileScanSize = (int)(Math.Min(bmp.Height, bmp.Width) * (1.0 / _GridSize));
             BitmapData bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
@@ -27,23 +27,19 @@ namespace AutoFocus
             byte[] data = new byte[size];
             Marshal.Copy(bmpData.Scan0, data, 0, size);
 
-            double[] scores = new double[tiles.Length];
-            int tileIDX = 0;
-            int scoreIDX = 0;
+            Task[] tasks = new Task[tiles.Length];
+            List<double> scores = new List<double>();
+            for (int i = 0; i < tiles.Length; i++)
+            {
+                Rectangle rect = new Rectangle(
+                    (int)(i / _GridSize * tileScanSize),
+                    (int)(i % _GridSize * tileScanSize),
+                    tileScanSize, tileScanSize);
+                tasks[i] = Task.Run(() => scores.Add(ScoreTileFocus(data, rect, bmpData.Stride)));
+            }
 
-            for (int i = 0; i < bmp.Width; i += tileScanSize)
-                for (int j = 0; j < bmp.Height; j += tileScanSize)
-                {
-                    if (tiles.Contains(tileIDX))
-                    {
-                        Rectangle tile = new Rectangle(i, j, tileScanSize, tileScanSize);
-                        scores[scoreIDX] = ScoreTileFocus(data, tile, bmpData.Stride);
-                        scoreIDX++;
-                        if (scoreIDX == tiles.Length) break;
-                    }
-                    tileIDX++;
-                }
-
+            await Task.WhenAll(tasks);
+            scores.RemoveAll(x => double.IsNaN(x));
             return scores.Average();
         }
 
@@ -56,7 +52,7 @@ namespace AutoFocus
                     int idx = i * 3 + j * stride;
                     if (idx + 2 < data.Length)
                     {
-                        double p1 = data[idx +2];
+                        double p1 = data[idx + 2];
                         double localPDiff = 0;
                         int counts = 0;
                         for (int k = i - (int)(0.5 / _AmountDataDesired); k < i + (int)(0.5 / _AmountDataDesired); k++)
@@ -114,6 +110,7 @@ namespace AutoFocus
         private static double GetRedCropEntropy(byte[] data, Rectangle tile, int stride)
         {
             byte[] counts = new byte[256];
+
             for (int i = tile.Left; i < tile.Right; i += (int)(1 / _AmountDataDesired))
                 for (int j = tile.Top; j < tile.Bottom; j += (int)(1 / _AmountDataDesired))
                 {

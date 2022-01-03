@@ -16,7 +16,7 @@ namespace AutoFocus
         private double _MaxScore;
         private int _BestIDX;
         private string _BestFileName;
-        private double _ImageScale = 0.2; // EDITABLE
+        private double _ImageScale = 1; // EDITABLE
 
         public AutoFocus()
         {
@@ -57,7 +57,7 @@ namespace AutoFocus
             {
                 image = new Bitmap(Image.FromFile(f));
                 resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
-                _Scores.Add(ScoreImageGrid(resizedImage, _FocusTiles));
+                _Scores.Add(ScoreImageGridAsync(resizedImage, _FocusTiles).Result);
             }
 
             e.Result = true; // Complete the background job
