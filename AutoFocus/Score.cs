@@ -9,10 +9,7 @@ namespace AutoFocus
     static class Score
     {
         public static int _NumTiles = 1;
-
         private static int _ScanSize, _Wid, _Hgt;
-        private static double _GridSize = 15.0; // EDITABLE n x n grid
-        private static double _AmountDataDesired = 0.1; // Highest 10% of available data from training grid
 
         /// Handy tool used as a method
         private static void BitmapCrop(Rectangle crop, Bitmap src, ref Bitmap target)
@@ -24,7 +21,7 @@ namespace AutoFocus
         // Gets grid pixels and then scores the image
         public static double ScoreImageFocus(Bitmap img)
         {
-            _ScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            _ScanSize = (int)Math.Ceiling(Math.Min(img.Height, img.Width) * (1.0 / AutoFocus.GridSize));
             _Wid = img.Width / _ScanSize;
             _Hgt = img.Height / _ScanSize;
 
@@ -83,7 +80,7 @@ namespace AutoFocus
         /// <returns></returns>
         public static double ScoreImageGrid(Bitmap img, int[] tiles)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / AutoFocus.GridSize));
             int tileIDX = 0;
             List<double> scores = new List<double>();
             
@@ -111,7 +108,7 @@ namespace AutoFocus
         // Returns the tiles within a grid that have entropies in the highest 2 histogram bins
         public static int[] GetTiles(Bitmap img)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / AutoFocus.GridSize));
             Dictionary<int, double> entropyDict = new Dictionary<int, double>();
             int entropyIDX = 0;
 
@@ -135,7 +132,7 @@ namespace AutoFocus
             }
 
             IEnumerable<int> sortedTiles = entropyDict.OrderBy(x => x.Value).Select(x => x.Key).Reverse();
-            int[] tiles = sortedTiles.Take((int)(sortedTiles.Count() * _AmountDataDesired)).ToArray();
+            int[] tiles = sortedTiles.Take((int)(sortedTiles.Count() * AutoFocus.AmountDataDesired)).ToArray();
             _NumTiles = tiles.Length;
             return tiles;
         }
@@ -147,7 +144,7 @@ namespace AutoFocus
         /// <param name="tiles"></param>
         public static void HighlightTiles(ref Bitmap img, int[] tiles)
         {
-            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / _GridSize));
+            int tileScanSize = (int)(Math.Min(img.Height, img.Width) * (1.0 / AutoFocus.GridSize));
             int tileIDX = 0;
             using (Graphics g = Graphics.FromImage(img))
             {

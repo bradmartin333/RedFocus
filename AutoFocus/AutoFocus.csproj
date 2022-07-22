@@ -7,14 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="XferMachineMapping.txt" />
-    <None Remove="XferOpticalContact.txt" />
+    <Compile Remove="Other\**" />
+    <EmbeddedResource Remove="Other\**" />
+    <None Remove="Other\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Other\XferAutoFocus.txt" />
-    <Compile Include="Other\XferMachineMapping.txt" />
-    <Compile Include="Other\XferOpticalContact.txt" />
+    <None Remove="XferMachineMapping.txt" />
+    <None Remove="XferOpticalContact.txt" />
   </ItemGroup>
 
   <ItemGroup>

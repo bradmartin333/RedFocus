@@ -10,24 +10,21 @@ namespace AutoFocus
 {
     public partial class AutoFocus : Form
     {
-        private string[] _Files;
+        public static double GridSize = 10.0; // N x N grid
+        public static double AmountDataDesired = 0.2; // Highest % of available data from training grid
+        private readonly double ImageScale = 0.5;
+        private readonly string[] _Files;
+        private readonly List<double> _Scores = new List<double>();
         private int[] _FocusTiles;
-        private List<double> _Scores = new List<double>();
         private double _MaxScore;
         private int _BestIDX;
         private string _BestFileName;
-        private double _ImageScale = 0.2; // EDITABLE
-        private string _Path = ""; // EDITBALE
-
+        
         public AutoFocus()
         {
             InitializeComponent();
-
             string startupPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName;
-            _Files = Directory.GetFiles(startupPath + "/Examples/Test4");
-            
-            //_Files = Directory.GetFiles(_Path);
-            
+            _Files = Directory.GetFiles(startupPath + "/Examples/Test");
             FocusWorker.RunWorkerAsync();
         }
 
@@ -53,13 +50,13 @@ namespace AutoFocus
         private void FocusWorker_DoWork(object sender, System.ComponentModel.DoWorkEventArgs e)
         {
             Bitmap image = new Bitmap(Image.FromFile(_Files[0]));
-            Bitmap resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+            Bitmap resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * ImageScale), (int)Math.Round(image.Height * ImageScale)));
             _FocusTiles = GetTiles(resizedImage); // Get tiles from first image in directory
 
             foreach (string f in _Files) // Score each image
             {
                 image = new Bitmap(Image.FromFile(f));
-                resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * _ImageScale), (int)Math.Round(image.Height * _ImageScale)));
+                resizedImage = new Bitmap(image, new Size((int)Math.Round(image.Width * ImageScale), (int)Math.Round(image.Height * ImageScale)));
                 _Scores.Add(ScoreImageGrid(resizedImage, _FocusTiles));
             }
 
