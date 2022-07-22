@@ -8,8 +8,8 @@ namespace AutoFocus
 {
     static class Score
     {
-        public static int _NumTiles = 1;
-        private static int _ScanSize, _Wid, _Hgt;
+        public static int NumTiles = 1;
+        private static int ScanSize, Wid, Hgt;
 
         /// Handy tool used as a method
         private static void BitmapCrop(Rectangle crop, Bitmap src, ref Bitmap target)
@@ -21,17 +21,17 @@ namespace AutoFocus
         // Gets grid pixels and then scores the image
         public static double ScoreImageFocus(Bitmap img)
         {
-            _ScanSize = (int)Math.Ceiling(Math.Min(img.Height, img.Width) * (1.0 / AutoFocus.GridSize));
-            _Wid = img.Width / _ScanSize;
-            _Hgt = img.Height / _ScanSize;
+            ScanSize = (int)Math.Ceiling(Math.Min(img.Height, img.Width) * (1.0 / AutoFocus.GridSize));
+            Wid = img.Width / ScanSize;
+            Hgt = img.Height / ScanSize;
 
             // Get red values for every pixel in a 2D array
-            double[,] PxlVals = new double[_Wid, _Hgt];
-            for (int i = 0; i < _Wid; i++)
+            double[,] PxlVals = new double[Wid, Hgt];
+            for (int i = 0; i < Wid; i++)
             {
-                for (int j = 0; j < _Hgt; j++)
+                for (int j = 0; j < Hgt; j++)
                 {
-                    PxlVals[i, j] = img.GetPixel(i * _ScanSize, j * _ScanSize).R;
+                    PxlVals[i, j] = img.GetPixel(i * ScanSize, j * ScanSize).R;
                 }
             }
 
@@ -42,16 +42,16 @@ namespace AutoFocus
         private static double GetNeighborSharpness(double[,] PxlVals)
         {
             List<double> PDiff = new List<double>();
-            for (int i = 0; i < _Wid; i++)
+            for (int i = 0; i < Wid; i++)
             {
-                for (int j = 0; j < _Hgt; j++)
+                for (int j = 0; j < Hgt; j++)
                 {
                     double LocalPDiff = 0.0;
-                    for (int k = i - _ScanSize; k <= i + _ScanSize; k++)
+                    for (int k = i - ScanSize; k <= i + ScanSize; k++)
                     {
-                        for (int l = j - _ScanSize; l <= j + _ScanSize; l++)
+                        for (int l = j - ScanSize; l <= j + ScanSize; l++)
                         {
-                            if (k > 0 && k < _Wid - 1 && l > 0 && l < _Hgt - 1)
+                            if (k > 0 && k < Wid - 1 && l > 0 && l < Hgt - 1)
                             {
                                 double p1 = PxlVals[i, j];
                                 double p2 = PxlVals[k, l];
@@ -63,7 +63,7 @@ namespace AutoFocus
                             }
                         }
                     }
-                    PDiff.Add(LocalPDiff / (_ScanSize * _ScanSize));
+                    PDiff.Add(LocalPDiff / (ScanSize * ScanSize));
                 }
             }
 
@@ -133,7 +133,7 @@ namespace AutoFocus
 
             IEnumerable<int> sortedTiles = entropyDict.OrderBy(x => x.Value).Select(x => x.Key).Reverse();
             int[] tiles = sortedTiles.Take((int)(sortedTiles.Count() * AutoFocus.AmountDataDesired)).ToArray();
-            _NumTiles = tiles.Length;
+            NumTiles = tiles.Length;
             return tiles;
         }
 
